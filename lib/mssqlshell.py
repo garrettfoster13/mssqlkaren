@@ -318,15 +318,10 @@ class SQLSHELL(cmd.Cmd):
             #saves the xml bodies to a file
             if policies:
                 for policy in policies:
-                    body = policy['Body'] 
-                    policy_assignments_id = policy['PolicyAssignmentID']     
+                    body = policy['Body']     
                     bytes_data = bytes.fromhex(body.decode('ascii'))
                     decoded_text = bytes_data.decode('utf-16-le')
-                    
-                    #save it to a file
-                    with open(f"karen/policyassignments/{policy_assignments_id}.xml", 'w') as f:
-                        f.write(decoded_text)
-                    
+                
                     ## parse the XML content for the plicy ID and version number
                     root = ET.fromstring(decoded_text)
                     policy = root.find('Policy')
@@ -343,10 +338,11 @@ class SQLSHELL(cmd.Cmd):
                 policy_body = self.sql_query(f"exec MP_GetPolicyBody N'{policy_id}', N'{policy_version}'")
                 if policy_body:
                     body = policy_body[0]['Body']
+                    safe_policy_id = policy_id.replace('/', '_')
                     bytes_data = bytes.fromhex(body.decode('ascii'))
                     decoded_text = bytes_data.decode('utf-16-le')
                     decoded_text = decoded_text.lstrip('feff')
-                    with open(f"karen/policies/{policy_id}.xml", 'w') as f:
+                    with open(f"karen/policies/{safe_policy_id}.xml", 'w') as f:
                         f.write(decoded_text)
         except Exception as e:
             print(e)
