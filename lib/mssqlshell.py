@@ -348,6 +348,9 @@ class SQLSHELL(cmd.Cmd):
                     decoded_text = decoded_text.lstrip('feff')
                     with open(f"karen/policies/{policy_id}.xml", 'w') as f:
                         f.write(decoded_text)
+        except Exception as e:
+            print(e)
+            pass
         except:
             pass
     def do_enum_links(self, line):
