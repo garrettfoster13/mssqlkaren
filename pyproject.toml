@@ -1,0 +1,12 @@
+[project]
+name = "mssqlclient"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "impacket",
+]
+
+[tool.uv.sources]
+impacket = { git = "https://github.com/fortra/impacket.git" }
