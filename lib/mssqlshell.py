@@ -389,9 +389,7 @@ class SQLSHELL(cmd.Cmd):
                                 except Exception as e:
                                     print(f"[*] Could not deobfuscate Task Sequence: {e}")
 
-                
-                        
-                    
+                         
         except Exception as e:
             print(e)
             pass

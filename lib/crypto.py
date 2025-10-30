@@ -28,11 +28,42 @@ def _3des_decrypt(data,key):
     _3des = DES3.new(key, DES3.MODE_CBC, b"\x00"*8)
     decrypted = _3des.decrypt(data)
     return decrypted.decode("utf-16-le")
+
+
+def aes256_decrypt(data,key,iv=b"\x00"*16):
+
+    aes256 = AES.new(key, AES.MODE_CBC, iv)
+    decrypted = aes256.decrypt(data)
+    return decrypted.decode("utf-16-le")
+
+
+    #thx @blurbdust https://github.com/blurbdust/PXEThief/blob/6d21293465959796c629e0a3517f1bb1655289b0/media_variable_file_cryptography.py#L80
+def credential_string_algo(credential_string):
+    hash_type = ""
+    algo_bytes = credential_string[112:116]
+    if algo_bytes == "1066":
+        hash_type = "aes256"
+    elif algo_bytes == "0366":
+        hash_type = "3des"
+    return hash_type
     
 def deobfuscate_credential_string(credential_string):
+    
+    algo = credential_string_algo(credential_string)
+    
     key_data = binascii.unhexlify(credential_string[8:88])
     encrypted_data = binascii.unhexlify(credential_string[128:])
 
     key = aes_des_key_derivation(key_data)
     last_16 = math.floor(len(encrypted_data)/8)*8
-    return _3des_decrypt(encrypted_data[:last_16],key[:24])
+
+    if algo == "3des":
+        last_16 = math.floor(len(encrypted_data)/8)*8
+        return _3des_decrypt(encrypted_data[:last_16], key[:24])
+    elif algo == "aes256":
+        last_16 = math.floor(len(encrypted_data)/16)*16 
+        return aes256_decrypt(encrypted_data[:last_16], key[:32])
+
+
+
+
