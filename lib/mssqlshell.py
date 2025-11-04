@@ -327,7 +327,7 @@ class SQLSHELL(cmd.Cmd):
                     
                     #ran into a policy id that had / in it, messed with open()
                     safe_assignment_id = assignment_id.replace('/', '_')
-                    with open(f"karen/policyassignments/{safe_assignment_id}.xml", 'w') as f:
+                    with open(f"karen/policyassignments/{safe_assignment_id}.xml", 'w', encoding='utf-8') as f:
                         f.write(decoded_text)
                 
                     ## parse the XML content for the plicy ID and version number
@@ -350,7 +350,7 @@ class SQLSHELL(cmd.Cmd):
                     bytes_data = bytes.fromhex(body.decode('ascii'))
                     decoded_text = bytes_data.decode('utf-16-le')
                     decoded_text = decoded_text.lstrip('feff')
-                    with open(f"karen/policies/{safe_policy_id}.xml", 'w') as f:
+                    with open(f"karen/policies/{safe_policy_id}.xml", 'w', encoding='utf-8') as f:
                         f.write(decoded_text)
                         
                     
@@ -382,7 +382,7 @@ class SQLSHELL(cmd.Cmd):
                                     ts_sequence = deobfuscate_credential_string(ts_data)
                                     ts_hash = hashlib.md5(ts_sequence.encode()).hexdigest()
                                     print("[!] successfully deobfuscated task sequence")
-                                    with open (f"karen/deobfuscated/ts_sequence_{ts_hash}.xml", 'w') as f:
+                                    with open (f"karen/deobfuscated/ts_sequence_{ts_hash}.xml", 'w', encoding='utf-8') as f:
                                         f.write(ts_sequence)
                                         print(f"[+] task sequence policy saved to karen/deobfuscated/ts_sequence_{ts_hash}.xml")
                                     
